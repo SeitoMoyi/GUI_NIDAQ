@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAQ Individual Channel Plots</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background-color: #8B0000;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .control-panel {
+            background-color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .button {
+            padding: 12px 25px;
+            margin: 8px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-connect { background-color: #8B0000; color: white; }
+        .btn-start { background-color: #228B22; color: white; }
+        .btn-stop { background-color: #DC143C; color: white; }
+        .btn-settings { background-color: #4682B4; color: white; }
+        
+        .settings-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            min-width: 150px;
+        }
+        
+        .input-group label {
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 3px;
+            color: #333;
+        }
+        
+        .input-group input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .input-group input:focus {
+            outline: none;
+            border-color: #4682B4;
+            box-shadow: 0 0 5px rgba(70, 130, 180, 0.3);
+        }
+        
+        .button:hover { opacity: 0.8; }
+        .button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        
+        .info-panel {
+            background-color: white;
+            padding: 10px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        
+        .info-item {
+            text-align: center;
+        }
+        
+        .info-label {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 3px;
+        }
+        
+        .info-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .message {
+            margin: 8px 0;
+            padding: 8px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .message-success { background-color: #90EE90; color: #006400; }
+        .message-error { background-color: #FFB6C1; color: #8B0000; }
+        
+        .plots-container {
+            display: grid;
+            grid-template-columns: repeat(var(--grid-columns, 4), 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .plot-item {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .plot-title {
+            background-color: #333;
+            color: white;
+            padding: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            text-align: center;
+            margin: 0;
+        }
+        
+        .emg-title {
+            background-color: #8B0000;
+        }
+        
+        .analog-title {
+            background-color: #2E8B57;
+        }
+        
+        .plot-div {
+            width: 100%;
+            height: 200px;
+        }
+        
+        .section-header {
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            margin: 15px 0 10px 0;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            grid-column: 1 / -1;
+        }
+        
+        .emg-section {
+            background-color: #8B0000;
+        }
+        
+        .analog-section {
+            background-color: #2E8B57;
+        }
+        
+        @media (max-width: 1400px) {
+            .plots-container {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        
+        @media (max-width: 1000px) {
+            .plots-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 600px) {
+            .plots-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DAQ Individual Channel Plots</h1>
+            <p>Real-time EMG and Analog Data Acquisition - 24 Individual Channels</p>
+        </div>
+        
+        <div class="info-panel">
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Connection</div>
+                    <div class="info-value" id="connectionStatus">Disconnected</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Recording</div>
+                    <div class="info-value" id="recordingStatus">Stopped</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Mode</div>
+                    <div class="info-value" id="modeStatus">Unknown</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Device</div>
+                    <div class="info-value" id="deviceStatus">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Trial</div>
+                    <div class="info-value" id="trialNumber">-</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="control-panel">
+            <div class="settings-row">
+                <div class="input-group">
+                    <label for="directoryInput">Save Directory:</label>
+                    <input type="text" id="directoryInput" placeholder="data" />
+                </div>
+                <div class="input-group">
+                    <label for="projectInput">Project Name:</label>
+                    <input type="text" id="projectInput" placeholder="swallow_JET" />
+                </div>
+                <button id="updateSettingsBtn" class="button btn-settings">Update Settings</button>
+            </div>
+            
+            <div class="control-row">
+                <button id="connectBtn" class="button btn-connect">Connect DAQ</button>
+                <button id="startBtn" class="button btn-start" disabled>START Recording</button>
+                <button id="stopBtn" class="button btn-stop" disabled>STOP Recording</button>
+            </div>
+            
+            <div id="messageArea"></div>
+        </div>
+        
+        <div class="plots-container" id="plotsContainer">
+            <!-- Plots will be dynamically generated here -->
+        </div>
+    </div>
+
+    <script>
+        // Socket.IO connection
+        const socket = io();
+        
+        // UI elements
+        const connectBtn = document.getElementById('connectBtn');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const updateSettingsBtn = document.getElementById('updateSettingsBtn');
+        const directoryInput = document.getElementById('directoryInput');
+        const projectInput = document.getElementById('projectInput');
+        const messageArea = document.getElementById('messageArea');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const modeStatus = document.getElementById('modeStatus');
+        const deviceStatus = document.getElementById('deviceStatus');
+        const trialNumber = document.getElementById('trialNumber');
+        const plotsContainer = document.getElementById('plotsContainer');
+        
+        // Plot configurations
+        const plotConfig = {
+            responsive: true,
+            displayModeBar: false
+        };
+        
+        const plotLayout = {
+            margin: { l: 40, r: 10, t: 10, b: 30 },
+            showlegend: false,
+            xaxis: { 
+                title: '', 
+                range: [-2, 0],  // Will be updated dynamically
+                showticklabels: false
+            },
+            yaxis: { 
+                title: '',
+                showticklabels: true,
+                tickfont: { size: 8 }
+            },
+            font: { size: 8 }
+        };
+        
+        let historyDuration = 2.0;  // Default, will be updated from server
+        
+        let plotDivs = [];
+        let plotInitialized = false;
+        
+        // Initialize plots
+        function initializePlots(analogCount, emgCount) {
+            if (plotInitialized) return;
+            
+            plotsContainer.innerHTML = '';
+            plotDivs = [];
+            
+            // Add EMG section header
+            const emgHeader = document.createElement('div');
+            emgHeader.className = 'section-header emg-section';
+            emgHeader.textContent = `EMG Channels (${emgCount} channels)`;
+            plotsContainer.appendChild(emgHeader);
+            
+            // Create EMG plots
+            for (let i = 0; i < emgCount; i++) {
+                const plotItem = document.createElement('div');
+                plotItem.className = 'plot-item';
+                
+                const title = document.createElement('div');
+                title.className = 'plot-title emg-title';
+                title.textContent = `EMG ${i + 1}`;
+                title.id = `title-emg-${i}`;
+                
+                const plotDiv = document.createElement('div');
+                plotDiv.className = 'plot-div';
+                plotDiv.id = `plot-emg-${i}`;
+                
+                plotItem.appendChild(title);
+                plotItem.appendChild(plotDiv);
+                plotsContainer.appendChild(plotItem);
+                
+                plotDivs.push(plotDiv.id);
+                
+                // Initialize empty plot
+                Plotly.newPlot(plotDiv.id, [], {
+                    ...plotLayout,
+                    xaxis: { ...plotLayout.xaxis, range: [-historyDuration, 0] },
+                    yaxis: { ...plotLayout.yaxis, range: [-1, 1] }
+                }, plotConfig);
+            }
+            
+            // Add Analog section header
+            const analogHeader = document.createElement('div');
+            analogHeader.className = 'section-header analog-section';
+            analogHeader.textContent = `Analog Input Channels (${analogCount} channels)`;
+            plotsContainer.appendChild(analogHeader);
+            
+            // Create Analog plots
+            for (let i = 0; i < analogCount; i++) {
+                const plotItem = document.createElement('div');
+                plotItem.className = 'plot-item';
+                
+                const title = document.createElement('div');
+                title.className = 'plot-title analog-title';
+                title.textContent = `AI ${i}`;
+                title.id = `title-analog-${i}`;
+                
+                const plotDiv = document.createElement('div');
+                plotDiv.className = 'plot-div';
+                plotDiv.id = `plot-analog-${i}`;
+                
+                plotItem.appendChild(title);
+                plotItem.appendChild(plotDiv);
+                plotsContainer.appendChild(plotItem);
+                
+                plotDivs.push(plotDiv.id);
+                
+                // Initialize empty plot
+                Plotly.newPlot(plotDiv.id, [], {
+                    ...plotLayout,
+                    xaxis: { ...plotLayout.xaxis, range: [-historyDuration, 0] },
+                    yaxis: { ...plotLayout.yaxis, range: [-1, 6] }
+                }, plotConfig);
+            }
+            
+            plotInitialized = true;
+        }
+        
+        // Button event handlers
+        connectBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/connect', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                showMessage(data.message, data.success ? 'success' : 'error');
+                updateStatus();
+            } catch (error) {
+                console.error('Connect error:', error);
+                showMessage('Connection failed: ' + error.message, 'error');
+            }
+        });
+        
+        startBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/start', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                showMessage(data.message, data.success ? 'success' : 'error');
+                updateStatus();
+                if (data.success) {
+                    startDataUpdates();
+                }
+            } catch (error) {
+                console.error('Start error:', error);
+                showMessage('Start failed: ' + error.message, 'error');
+            }
+        });
+        
+        stopBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/stop', { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                showMessage(data.message, data.success ? 'success' : 'error');
+                updateStatus();
+                stopDataUpdates();
+            } catch (error) {
+                console.error('Stop error:', error);
+                showMessage('Stop failed: ' + error.message, 'error');
+            }
+        });
+        
+        updateSettingsBtn.addEventListener('click', async () => {
+            try {
+                const directory = directoryInput.value.trim();
+                const project = projectInput.value.trim();
+                
+                if (!directory && !project) {
+                    showMessage('Please enter directory or project name', 'error');
+                    return;
+                }
+                
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        directory: directory,
+                        project: project
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                showMessage(data.message, data.success ? 'success' : 'error');
+                updateStatus();
+            } catch (error) {
+                console.error('Settings error:', error);
+                showMessage('Settings update failed: ' + error.message, 'error');
+            }
+        });
+        
+        // Message display
+        function showMessage(message, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message message-${type}`;
+            messageDiv.textContent = message;
+            messageArea.innerHTML = '';
+            messageArea.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                if (messageArea.contains(messageDiv)) {
+                    messageArea.removeChild(messageDiv);
+                }
+            }, 5000);
+        }
+        
+        // Status updates
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const status = await response.json();
+                
+                connectionStatus.textContent = status.connected ? 'Connected' : 'Disconnected';
+                recordingStatus.textContent = status.recording ? 'Recording' : 'Stopped';
+                modeStatus.textContent = status.simulation ? 'Simulation' : 'Hardware';
+                deviceStatus.textContent = status.device_name || '-';
+                trialNumber.textContent = status.trial_number;
+                
+                // Update input placeholders with current values
+                directoryInput.placeholder = status.output_directory || status.default_directory;
+                projectInput.placeholder = status.project_name || status.default_project;
+                
+                // Update performance settings
+                window.webUpdateInterval = status.web_update_interval || 100;
+                window.statusUpdateInterval = status.status_update_interval || 2000;
+                
+                // Update history duration for x-axis range
+                if (status.history_duration) {
+                    historyDuration = status.history_duration;
+                }
+                
+                // Update CSS grid columns
+                if (status.grid_columns) {
+                    document.documentElement.style.setProperty('--grid-columns', status.grid_columns);
+                }
+                
+                connectBtn.disabled = status.connected;
+                startBtn.disabled = !status.connected || status.recording;
+                stopBtn.disabled = !status.recording;
+                updateSettingsBtn.disabled = status.recording;
+                
+            } catch (error) {
+                console.error('Status update failed:', error);
+            }
+        }
+        
+        // Real-time data updates
+        let dataUpdateInterval;
+        
+        function startDataUpdates() {
+            // Use configurable update interval from server
+            const updateInterval = window.webUpdateInterval || 100;
+            dataUpdateInterval = setInterval(() => {
+                socket.emit('request_data');
+            }, updateInterval);
+        }
+        
+        function stopDataUpdates() {
+            if (dataUpdateInterval) {
+                clearInterval(dataUpdateInterval);
+                dataUpdateInterval = null;
+            }
+        }
+        
+        // Socket event handlers
+        socket.on('data_update', (data) => {
+            updatePlots(data);
+        });
+        
+        function updatePlots(data) {
+            if (!data || !data.times || data.times.length === 0) return;
+            
+            // Initialize plots if not done yet
+            if (!plotInitialized) {
+                initializePlots(data.analog_count, data.emg_count);
+            }
+            
+            // Adjust time to show last N seconds (based on history duration)
+            const currentTime = Math.max(...data.times);
+            const adjustedTimes = data.times.map(t => t - currentTime);
+            
+            // Update each channel plot
+            data.channels.forEach((channelData, i) => {
+                if (i < plotDivs.length) {
+                    const trace = {
+                        x: adjustedTimes,
+                        y: channelData,
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: { width: 1, color: i < data.emg_count ? '#8B0000' : '#2E8B57' },
+                        name: data.labels[i]
+                    };
+                    
+                    // Update plot
+                    const plotId = plotDivs[i];
+                    const yRange = i < data.emg_count ? [-1, 1] : [-1, 6];
+                    
+                    Plotly.react(plotId, [trace], {
+                        ...plotLayout,
+                        xaxis: { ...plotLayout.xaxis, range: [-historyDuration, 0] },
+                        yaxis: { ...plotLayout.yaxis, range: yRange }
+                    }, plotConfig);
+                    
+                    // Update title with label
+                    const titleId = i < data.emg_count ? `title-emg-${i}` : `title-analog-${i - data.emg_count}`;
+                    const titleElement = document.getElementById(titleId);
+                    if (titleElement && data.labels[i]) {
+                        titleElement.textContent = data.labels[i];
+                    }
+                }
+            });
+        }
+        
+        // Initialize status on page load
+        updateStatus();
+        
+        // Periodic status updates with configurable interval
+        const statusInterval = window.statusUpdateInterval || 2000;
+        setInterval(updateStatus, statusInterval);
+    </script>
+</body>
+</html>
