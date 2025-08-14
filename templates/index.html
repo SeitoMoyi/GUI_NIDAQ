@@ -272,10 +272,10 @@
     </div>
 
     <script>
-        // Socket.IO connection
+        // Connect to server
         const socket = io();
         
-        // UI elements
+        // Get page elements
         const connectBtn = document.getElementById('connectBtn');
         const startBtn = document.getElementById('startBtn');
         const stopBtn = document.getElementById('stopBtn');
@@ -290,7 +290,7 @@
         const trialNumber = document.getElementById('trialNumber');
         const plotsContainer = document.getElementById('plotsContainer');
         
-        // Plot configurations
+        // Plot settings
         const plotConfig = {
             responsive: true,
             displayModeBar: false
@@ -317,7 +317,7 @@
         let plotDivs = [];
         let plotInitialized = false;
         
-        // Initialize plots
+        // Set up plots
         function initializePlots(analogCount, emgCount) {
             if (plotInitialized) return;
             
@@ -350,7 +350,7 @@
                 
                 plotDivs.push(plotDiv.id);
                 
-                // Initialize empty plot
+                // Create empty EMG plot
                 Plotly.newPlot(plotDiv.id, [], {
                     ...plotLayout,
                     xaxis: { ...plotLayout.xaxis, range: [-historyDuration, 0] },
@@ -384,7 +384,7 @@
                 
                 plotDivs.push(plotDiv.id);
                 
-                // Initialize empty plot
+                // Create empty analog plot
                 Plotly.newPlot(plotDiv.id, [], {
                     ...plotLayout,
                     xaxis: { ...plotLayout.xaxis, range: [-historyDuration, 0] },
@@ -395,7 +395,7 @@
             plotInitialized = true;
         }
         
-        // Button event handlers
+        // Handle button clicks
         connectBtn.addEventListener('click', async () => {
             try {
                 const response = await fetch('/api/connect', { 
@@ -492,7 +492,7 @@
             }
         });
         
-        // Message display
+        // Show messages to user
         function showMessage(message, type) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message message-${type}`;
@@ -507,7 +507,7 @@
             }, 5000);
         }
         
-        // Status updates
+        // Update status display
         async function updateStatus() {
             try {
                 const response = await fetch('/api/status');
@@ -547,11 +547,11 @@
             }
         }
         
-        // Real-time data updates
+        // Handle live data updates
         let dataUpdateInterval;
         
         function startDataUpdates() {
-            // Use configurable update interval from server
+            // Use update speed from server settings
             const updateInterval = window.webUpdateInterval || 100;
             dataUpdateInterval = setInterval(() => {
                 socket.emit('request_data');
@@ -565,7 +565,7 @@
             }
         }
         
-        // Socket event handlers
+        // Handle server messages
         socket.on('data_update', (data) => {
             updatePlots(data);
         });
@@ -573,12 +573,12 @@
         function updatePlots(data) {
             if (!data || !data.times || data.times.length === 0) return;
             
-            // Initialize plots if not done yet
+            // Set up plots if needed
             if (!plotInitialized) {
                 initializePlots(data.analog_count, data.emg_count);
             }
             
-            // Adjust time to show last N seconds (based on history duration)
+            // Adjust time to show recent data
             const currentTime = Math.max(...data.times);
             const adjustedTimes = data.times.map(t => t - currentTime);
             
@@ -614,10 +614,10 @@
             });
         }
         
-        // Initialize status on page load
+        // Load initial status
         updateStatus();
         
-        // Periodic status updates with configurable interval
+        // Update status regularly
         const statusInterval = window.statusUpdateInterval || 2000;
         setInterval(updateStatus, statusInterval);
     </script>

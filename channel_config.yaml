@@ -1,6 +1,6 @@
 # DAQ Channel Configuration - Optimized for Performance
-# This configuration provides 60% less CPU usage and 70% less memory usage
-# Perfect for slower PCs while maintaining full functionality
+# This configuration reduces CPU and memory usage for slower computers
+# while maintaining full functionality
 
 # Analog Input Channels (16 channels)
 analog_channels:
@@ -114,12 +114,12 @@ emg_channels:
     range: [-5, 5]
     hardware_channel: 23
 
-# Hardware Configuration - OPTIMIZED FOR SLOW PCs
+# Hardware Configuration - Optimized for slower computers
 hardware:
   device_name: "Dev1"
-  sampling_rate: 1000        # Reduced from 2500 Hz to 1000 Hz (60% less CPU load)
-  update_rate: 0.2           # Reduced from 0.1s to 0.2s (50% less frequent updates)
-  history_duration: 2.0      # Plot history duration (2.0s = x-axis from -2 to 0)
+  sampling_rate: 1000        # Lower sampling rate for better performance
+  update_rate: 0.2           # Update every 0.2 seconds
+  history_duration: 2.0      # Show 2 seconds of data history
   
   # Terminal configurations
   analog_terminal_config: "single_ended_non_referenced"
@@ -132,19 +132,19 @@ file_settings:
   file_format: "binary"
   metadata_format: "json"
   
-# Display Settings - OPTIMIZED FOR PERFORMANCE
+# Display Settings - Optimized for performance
 display:
   emg_y_range: [-1, 1]
   analog_y_range: [-1, 6]
   plot_colors:
     emg: "#8B0000"
     analog: "#2E8B57"
-  grid_columns: 2            # Reduced from 4 to 2 columns (less plots per row)
+  grid_columns: 2            # Show 2 columns of plots
   
 # Performance Settings for Slow PCs
 performance:
-  web_update_interval: 200   # Web interface updates every 200ms instead of 100ms
-  status_update_interval: 5000  # Status updates every 5s instead of 2s
-  buffer_multiplier: 5       # Smaller hardware buffer (5x instead of 10x)
-  plot_line_width: 1         # Thin lines for better performance
-  enable_antialiasing: false # Disable antialiasing for faster rendering
+  web_update_interval: 200   # Web interface updates every 200ms
+  status_update_interval: 5000  # Status updates every 5 seconds
+  buffer_multiplier: 5       # Smaller hardware buffer for better performance
+  plot_line_width: 1         # Thin lines for faster rendering
+  enable_antialiasing: false # Disable antialiasing for speed

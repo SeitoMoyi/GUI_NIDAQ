@@ -31,65 +31,60 @@ from flask_socketio import SocketIO, emit
 
 class DAQStreamer:
     def __init__(self, use_hardware=False, config_file="channel_config.yaml"):
-        # Load configuration from YAML file
         self.config = self.load_config(config_file)
         
-        # Configuration from YAML
         hw_config = self.config.get('hardware', {})
         self.fs = hw_config.get('sampling_rate', 2500)
         self.update_rate = hw_config.get('update_rate', 0.1)
         self.history_duration = hw_config.get('history_duration', 3.0)
         self.max_samples = int(self.fs * self.history_duration)
         
-        # Channel configuration
         self.analog_channels = len(self.config.get('analog_channels', []))
         self.emg_channels = len(self.config.get('emg_channels', []))
         self.total_channels = self.analog_channels + self.emg_channels
         
-        # Hardware configuration
+        # Set hardware or simulation mode
         self.use_hardware = use_hardware and NIDAQ_AVAILABLE
         self.simulation_mode = not self.use_hardware
         self.device_name = hw_config.get('device_name', "Dev1")
         
-        # EMG channel mapping from config
+        # Map EMG channels to hardware pins
         self.emg_ch_map = [ch.get('hardware_channel', 17+i) for i, ch in enumerate(self.config.get('emg_channels', []))]
         
-        # Labels from config
+        # Get channel labels from config
         self.analog_labels = [ch.get('name', f'Analog {i}') for i, ch in enumerate(self.config.get('analog_channels', []))]
         self.analog_short_labels = [ch.get('short_name', f'AI-{i}') for i, ch in enumerate(self.config.get('analog_channels', []))]
         
         self.muscle_labels = [ch.get('name', f'EMG {i}') for i, ch in enumerate(self.config.get('emg_channels', []))]
         self.muscle_short_labels = [ch.get('short_name', f'EMG-{i}') for i, ch in enumerate(self.config.get('emg_channels', []))]
         
-        # File settings
+        # Set up file saving options
         file_config = self.config.get('file_settings', {})
         self.default_directory = file_config.get('default_directory', 'data')
         self.default_project = file_config.get('default_project', 'swallow_JET')
-        
-        # User-configurable settings
         self.output_directory = self.default_directory
         self.project_name = self.default_project
         
-        # Performance settings
+        # Performance settings for web interface
         perf_config = self.config.get('performance', {})
         self.web_update_interval = perf_config.get('web_update_interval', 100)
         self.status_update_interval = perf_config.get('status_update_interval', 2000)
         self.buffer_multiplier = perf_config.get('buffer_multiplier', 10)
         
-        # Display settings
+        # Display layout settings
         display_config = self.config.get('display', {})
         self.grid_columns = display_config.get('grid_columns', 4)
         
-        # Data storage
+        # Data storage buffers
         self.data_buffer = deque(maxlen=self.max_samples)
         self.timestamps = deque(maxlen=self.max_samples)
         
-        # State variables
+        # Current system state
         self.is_recording = False
         self.is_connected = False
         self.trial_number = 1
         
-        # Threading
+        # Threading for data acquisition
         self.data_thread = None
         self.stop_event = threading.Event()
         self.task = None
@@ -99,7 +94,7 @@ class DAQStreamer:
         print(f"Config loaded from: {config_file}")
     
     def load_config(self, config_file):
-        """Load configuration from YAML file"""
+        """Load settings from YAML configuration file"""
         try:
             with open(config_file, 'r') as f:
                 config = yaml.safe_load(f)
@@ -113,7 +108,7 @@ class DAQStreamer:
             return self.get_default_config()
     
     def get_default_config(self):
-        """Return default configuration if YAML file is not available"""
+        """Return default configuration when YAML file is missing"""
         return {
             'analog_channels': [{'name': f'Analog {i}', 'short_name': f'AI-{i}'} for i in range(16)],
             'emg_channels': [
@@ -127,7 +122,7 @@ class DAQStreamer:
         }
     
     def update_settings(self, directory=None, project=None):
-        """Update user-configurable settings"""
+        """Update save directory and project name"""
         if directory:
             self.output_directory = directory
         if project:
@@ -135,7 +130,7 @@ class DAQStreamer:
         return True, "Settings updated successfully"
     
     def connect_daq(self):
-        """Connect to DAQ hardware or enable simulation"""
+        """Connect to DAQ hardware or start simulation mode"""
         if self.simulation_mode:
             self.is_connected = True
             return True, "Simulation mode enabled - DAQ ready"
@@ -254,14 +249,12 @@ class DAQStreamer:
         try:
             self.task = nidaqmx.Task()
             
-            # Add analog input channels (0-15)
             for i in range(self.analog_channels):
                 chan = self.task.ai_channels.add_ai_voltage_chan(f"{self.device_name}/ai{i}")
                 chan.ai_term_cfg = TerminalConfiguration.SINGLE_ENDED_NON_REFERENCED
             
-            # Add EMG channels (using mapped channels)
             for i, ch in enumerate(self.emg_ch_map):
-                if ch < 80:  # Ensure valid channel number
+                if ch < 80:
                     chan = self.task.ai_channels.add_ai_voltage_chan(f"{self.device_name}/ai{ch}")
                     chan.ai_term_cfg = TerminalConfiguration.SINGLE_ENDED
             
@@ -351,23 +344,20 @@ class DAQStreamer:
                     current_time = time.time() - start_time
                     timestamps = np.linspace(current_time, current_time + self.update_rate, samples_per_update)
                     
-                    # Generate simulated data
                     data = np.zeros((samples_per_update, self.total_channels))
                     
-                    # Analog channels - various signals
                     for i in range(self.analog_channels):
                         if i < 4:  # HUMAC channels
                             data[:, i] = 0.5 * np.sin(2 * np.pi * (i + 1) * timestamps) + 0.1 * np.random.randn(samples_per_update)
                         elif i in [4, 5, 6, 7, 8]:  # Digital-like signals
                             data[:, i] = np.random.choice([0, 5], samples_per_update, p=[0.95, 0.05])
-                        else:  # Other analog signals
+                        else:
                             data[:, i] = 0.2 * np.sin(2 * np.pi * 0.5 * timestamps) + 0.05 * np.random.randn(samples_per_update)
                     
-                    # EMG channels - simulated muscle activity
                     for i in range(self.emg_channels):
                         emg_idx = self.analog_channels + i
                         base_emg = 0.1 * np.random.randn(samples_per_update)
-                        if np.random.random() < 0.1:  # 10% chance of muscle activation
+                        if np.random.random() < 0.1:
                             burst = 0.8 * np.exp(-((timestamps - current_time - 0.05) / 0.02) ** 2)
                             base_emg += burst
                         data[:, emg_idx] = base_emg
@@ -388,21 +378,19 @@ class DAQStreamer:
             self.is_recording = False
     
     def get_plot_data(self):
-        """Get current data for plotting - individual channels"""
+        """Get current data for plotting individual channels"""
         if len(self.timestamps) == 0:
             return None
         
         times = np.array(list(self.timestamps))
         data = np.array(list(self.data_buffer))
         
-        # Get recent data (last 3 seconds)
+        # Show only recent data based on history duration
         current_time = times[-1] if len(times) > 0 else 0
         mask = times >= (current_time - self.history_duration)
         
         plot_times = times[mask]
         plot_data = data[mask]
-        
-        # Return individual channel data
         all_channels = []
         all_labels = []
         
@@ -425,11 +413,10 @@ class DAQStreamer:
             'emg_count': self.emg_channels
         }
 
-# Global DAQ instance - default to simulation mode
 daq = None
 
 def get_daq_instance():
-    """Get or create DAQ instance with simulation mode as default"""
+    """Get or create DAQ instance (defaults to simulation mode)"""
     global daq
     if daq is None:
         print("Initializing DAQ in simulation mode (default)")
@@ -536,7 +523,7 @@ def update_settings():
 
 @socketio.on('request_data')
 def handle_data_request():
-    """Send real-time data to client"""
+    """Send current data to web interface"""
     daq_instance = get_daq_instance()
     plot_data = daq_instance.get_plot_data()
     if plot_data:

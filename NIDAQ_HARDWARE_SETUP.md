@@ -1,6 +1,6 @@
 # NIDAQ Hardware Setup Guide
 
-## 🔧 Quick Hardware Setup
+## Quick Hardware Setup
 
 ### Prerequisites
 
@@ -18,7 +18,7 @@
    - Use NI MAX (Measurement & Automation Explorer) to detect your device
    - Note your device name (e.g., "Dev1", "Dev2", etc.)
 
-### 🎯 Enabling Hardware Mode
+### Enabling Hardware Mode
 
 **Command Line (Recommended):**
 ```bash
@@ -32,7 +32,7 @@ hardware:
   device_name: "Dev1"  # Change to match your device name from NI MAX
 ```
 
-### 📊 Channel Configuration
+### Channel Configuration
 
 #### Analog Input Channels (16 channels)
 - **Hardware channels**: Dev1/ai0 to Dev1/ai15
@@ -46,7 +46,7 @@ hardware:
 - **Voltage range**: ±10V (default)
 - **Labels**: L_APB, L-FLEX, L_FDI, NC
 
-### 🔌 Hardware Wiring
+### Hardware Wiring
 
 #### Analog Input Connections
 ```
@@ -76,7 +76,7 @@ AI29 - L_FDI (EMG Channel 3)
 AI23 - NC (EMG Channel 4)
 ```
 
-### ⚙️ DAQ Device Settings
+### DAQ Device Settings
 
 #### Recommended Hardware
 - **NI USB-6363** (USB, 32 AI channels, 2.0 MS/s)
@@ -89,7 +89,7 @@ AI23 - NC (EMG Channel 4)
 - **Update rate**: 10 Hz (every 0.1 seconds)
 - **Acquisition mode**: Continuous
 
-### 🚀 Running with Hardware
+### Running with Hardware
 
 1. **Connect your DAQ device**
 2. **Verify in NI MAX**
@@ -103,7 +103,7 @@ AI23 - NC (EMG Channel 4)
    python daq_gui_individual_plots.py
    ```
 
-### 🔍 Troubleshooting
+### Troubleshooting
 
 #### Common Issues
 
@@ -140,7 +140,7 @@ chan.ai_min = -5.0  # Minimum voltage
 chan.ai_max = 5.0   # Maximum voltage
 ```
 
-### 📝 Testing Hardware Connection
+### Testing Hardware Connection
 
 Use this simple test script to verify your hardware:
 
@@ -156,7 +156,7 @@ with nidaqmx.Task() as task:
     print(f"Sample data: {data[:5]}")  # First 5 samples
 ```
 
-### 🎛️ NI MAX Configuration
+### NI MAX Configuration
 
 1. **Open NI MAX**
 2. **Expand "Devices and Interfaces"**
@@ -165,14 +165,14 @@ with nidaqmx.Task() as task:
 5. **Test analog input channels**
 6. **Verify channel numbers and ranges**
 
-### 📊 Expected Performance
+### Expected Performance
 
 - **Latency**: ~100ms display update
 - **Throughput**: 2500 samples/sec × 20 channels = 50,000 samples/sec
 - **File size**: ~400 KB/second (binary format)
 - **Memory usage**: ~3 seconds × 50,000 samples × 8 bytes = ~1.2 MB buffer
 
-### 🔄 Switching Between Modes
+### Switching Between Modes
 
 **Simulation Mode** (default):
 ```python
