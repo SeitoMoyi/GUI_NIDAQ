@@ -1,4 +1,4 @@
-classdef DAQ_App < matlab.apps.AppBase
+classdef DAQ_App_exported < matlab.apps.AppBase
 
     % Properties that correspond to app components
     properties (Access = public)
@@ -67,57 +67,54 @@ classdef DAQ_App < matlab.apps.AppBase
 
     
     properties (Access = private)
-        % DAQ and Dragonfly Objects
-        dq               % DAQ object for data acquisition
-        DF               % Dragonfly object
-        Fs = 2500        % Sampling rate
-
+        % DAQ Objects
+        dq               % DAQ object
+        Fs = 2500        % Sampling rate (Hz)
+        
         % File I/O and Metadata
         SubID            % Subject ID
-        Filestr          % File string for session name
-        TrlNum = 1       % Trial number, starts at 1
-        pathname         % Directory to save data
-        meta_path        % Directory for metadata
-        OPfile
+        Filestr          % Session file string
+        TrlNum = 1       % Trial number (starts at 1)
+        pathname         % Data save directory
+        meta_path        % Metadata directory
+        OPfile           % Output file path
         
         % App State
-        isInitialized = false % Flag to check if app is ready
+        isInitialized = false % App ready flag
         
         % Plotting Handles and Buffers
-        emgPlotHandles   % Handles for the 4 EMG line plots
-        analogPlotHandles % Handles for the 2 analog line plots
-        plotBuffer       % FIXED-SIZE circular buffer for plotting
-        timeBuffer       % FIXED-SIZE time vector for the plot buffer
-        emgAxes          % Handles to the EMG UIAxes
-        analogAxes       % Handles to the Analog UIAxes
-        fid
-
-        EMG_CH
-        muscle_labels
-        analog_input_labels
-        combinedPlotHandles  % Handles for the 6 combined line plots
+        emgPlotHandles   % EMG plot handles (4)
+        analogPlotHandles % Analog plot handles (2)
+        combinedPlotHandles  % Combined plot handles (6)
+        plotBuffer       % Plot data buffer
+        timeBuffer       % Time buffer
+        emgAxes          % EMG axes
+        analogAxes       % Analog axes
+        fid              % File identifier
+        EMG_CH           % EMG channel numbers
+        muscle_labels    % Muscle labels
+        analog_input_labels % Analog input labels
+        analog_scaling_factor = 0.1 % Analog scaling for EMG-ANA alignment
     end
 
     methods (Access = private)
-
-        % Centralized plot setup
         function setupPlots(app)
-            % Pre-allocate handles
+            % Initialize plot handles
             app.emgPlotHandles = gobjects(1, 4);
             app.analogPlotHandles = gobjects(1, 2);
             app.combinedPlotHandles = gobjects(1, 6);
-
-            % Setup individual EMG plots
+            
+            % Set up EMG plots
             for i = 1:4
                 app.emgPlotHandles(i) = plot(app.emgAxes(i), NaN, NaN, 'b-');
             end
-
-            % Setup individual Analog plots
+            
+            % Set up analog plots
             for i = 1:2
                 app.analogPlotHandles(i) = plot(app.analogAxes(i), NaN, NaN, 'r-');
             end
-
-            % Setup Combined plot
+            
+            % Set up combined plot
             hold(app.CombinedAxes, 'on');
             colors = {'#0072BD', '#D95319', '#EDB120', '#7E2F8E', '#77AC30', '#4DBEEE'};
             lineStyles = {'-', '-', '-', '-', '--', '--'};
@@ -131,35 +128,32 @@ classdef DAQ_App < matlab.apps.AppBase
             grid(app.CombinedAxes, 'off');
             hold(app.CombinedAxes, 'off');
         end
-
-        % Main DAQ callback
-        function logBroadcastAndPlotData(app, src, ~)
-            % 1. Read data and write to file
+    
+        function PlotData(app, src, ~)
+            % Read data and write to file
             [data, timestamps, ~] = read(src, src.ScansAvailableFcnCount, "OutputFormat", "Matrix");
             fwrite(app.fid, [timestamps, data]', 'double');
             
-            % 2. Update the circular plot buffer
+            % Update plot buffer
             newSamples = size(data, 1);
             app.plotBuffer = [app.plotBuffer(newSamples+1:end, :); data];
             
-            % 3. Call the centralized plotting function
             updatePlots(app);
-            
             drawnow('limitrate');
         end
         
-        % Centralized function for all real-time plotting logic
+        % Update plots in real-time
         function updatePlots(app)
             selectedTab = app.TabGroup.SelectedTab;
-        
+            
             if selectedTab == app.EMGGridLayout
+                % Update EMG plots
                 selected_labels = app.EMGChannelsListBox.Value;
                 for i = 1:4
                     ax = app.emgAxes(i);
                     handle = app.emgPlotHandles(i);
                     if i <= numel(selected_labels)
                         label = selected_labels{i};
-                        % Use logical indexing to find the correct channel number
                         logical_idx = strcmp(app.muscle_labels, label);
                         ch_num = app.EMG_CH(logical_idx);
                         plotData = app.plotBuffer(:, ch_num) - mean(app.plotBuffer(:, ch_num), 'omitnan');
@@ -168,12 +162,13 @@ classdef DAQ_App < matlab.apps.AppBase
                         title(ax, label, 'Interpreter', 'none');
                         applyYLimits(app, ax, app.EMGYMinEditField, app.EMGYMaxEditField);
                     else
-                        set(handle, 'XData', NaN, 'YData', NaN');
+                        set(handle, 'XData', NaN, 'YData', NaN);
                         title(ax, ['EMG CH' num2str(i)], 'Interpreter', 'none');
                     end
                 end
-        
+                
             elseif selectedTab == app.AnalogGridLayout
+                % Update analog plots
                 selected_labels = app.AnalogChannelsListBox.Value;
                 for i = 1:2
                     ax = app.analogAxes(i);
@@ -182,24 +177,24 @@ classdef DAQ_App < matlab.apps.AppBase
                         label = selected_labels{i};
                         ch_idx = find(strcmp(app.analog_input_labels, label), 1);
                         
-                        set(handle, 'XData', app.timeBuffer, 'YData', app.plotBuffer(:, ch_idx));
+                        set(handle, 'XData', app.timeBuffer, 'YData', app.plotBuffer(:, ch_idx) * app.analog_scaling_factor);
                         title(ax, label, 'Interpreter', 'none');
                         applyYLimits(app, ax, app.AnalogYMinEditField, app.AnalogYMaxEditField);
                     else
-                        set(handle, 'XData', NaN, 'YData', NaN');
+                        set(handle, 'XData', NaN, 'YData', NaN);
                         title(ax, ['Analog CH' num2str(i)], 'Interpreter', 'none');
                     end
                 end
-        
+                
             elseif selectedTab == app.CombinedGridLayout
+                % Update combined plot
                 selected_labels = app.CombinedListBox.Value;
                 
                 for i = 1:6, set(app.combinedPlotHandles(i), 'Visible', 'off'); end
-
                 for i = 1:numel(selected_labels)
                     current_label = selected_labels{i};
                     
-                    % Check if EMG or Analog
+                    % Check EMG or Analog
                     logical_emg_idx = strcmp(app.muscle_labels, current_label);
                     analog_idx = find(strcmp(app.analog_input_labels, current_label), 1);
                     
@@ -207,9 +202,9 @@ classdef DAQ_App < matlab.apps.AppBase
                         ch_num = app.EMG_CH(logical_emg_idx);
                         plotData = app.plotBuffer(:, ch_num) - mean(app.plotBuffer(:, ch_num), 'omitnan');
                     elseif ~isempty(analog_idx)
-                        plotData = app.plotBuffer(:, analog_idx);
+                        plotData = app.plotBuffer(:, analog_idx) * app.analog_scaling_factor;
                     else
-                        continue; % Skip if label not found
+                        continue;
                     end
                     set(app.combinedPlotHandles(i), 'XData', app.timeBuffer, 'YData', plotData, 'Visible', 'on');
                 end
@@ -218,8 +213,8 @@ classdef DAQ_App < matlab.apps.AppBase
                 applyYLimits(app, app.CombinedAxes, app.CombinedYMinEditField, app.CombinedYMaxEditField);
             end
         end
-
-        % Helper to keep the Combined list box in sync
+        
+        % Sync combined list box
         function updateCombinedListBox(app)
             selectedEMG = app.EMGChannelsListBox.Value;
             selectedAnalog = app.AnalogChannelsListBox.Value;
@@ -228,7 +223,7 @@ classdef DAQ_App < matlab.apps.AppBase
             app.CombinedListBox.Value = combinedItems;
         end
         
-        % Helper to apply Y-axis limits
+        % Apply Y-axis limits
         function applyYLimits(app, axesHandle, yMinField, yMaxField)
             yMin = yMinField.Value;
             yMax = yMaxField.Value;
@@ -238,13 +233,12 @@ classdef DAQ_App < matlab.apps.AppBase
                 ylim(axesHandle, 'auto');
             end
         end
-
-        % Helper to generate the summary plot after stopping
+        
+        % Generate summary plot after stop
         function generateSummaryPlot(app)
             channelsToPlot = app.CombinedListBox.Value;
             if isempty(channelsToPlot), return; end
             if numel(channelsToPlot) > 6, channelsToPlot = channelsToPlot(1:6); end
-
             try
                 fid_read = fopen(app.OPfile, 'r');
                 numTotalChannels = numel(app.dq.Channels);
@@ -254,10 +248,8 @@ classdef DAQ_App < matlab.apps.AppBase
                 allData = rawData';
                 timeVector = allData(:, 1);
                 dataMatrix = allData(:, 2:end);
-
                 summaryFig = figure('Name', ['Trial Summary: ' app.Filestr '_Trl' num2str(app.TrlNum)], 'NumberTitle', 'off');
                 tiledlayout(summaryFig, 'flow');
-
                 for i = 1:numel(channelsToPlot)
                     current_label = channelsToPlot{i};
                     emg_idx = find(strcmp(app.muscle_labels, current_label));
@@ -280,8 +272,8 @@ classdef DAQ_App < matlab.apps.AppBase
                 warning('DAQ_App:summaryPlotError', 'Could not generate summary plot. Error: %s', ME.message);
             end
         end
-end
-
+    end
+    
 
     % Callbacks that handle component events
     methods (Access = private)
@@ -300,7 +292,6 @@ end
                 app.muscle_labels = arrayfun(@(n) sprintf('EMG %d', n), 1:16, 'UniformOutput', false);
                 app.analog_input_labels = arrayfun(@(n) sprintf('Analog %d', n), 1:16, 'UniformOutput', false);
             end
-
             % Configure UI components
             app.EMGChannelsListBox.Items = app.muscle_labels;
             app.EMGChannelsListBox.Value = app.muscle_labels(1:4);
@@ -379,7 +370,6 @@ end
                 uialert(app.UIFigure, ['File Error: ', ME.message], 'Error');
                 return;
             end
-
             % Initialize plot buffers
             bufferDuration = 2;
             bufferSamples = bufferDuration * app.Fs;
@@ -408,7 +398,6 @@ end
             
             % Save metadata
             meta_data = struct();
-
             meta_data.sub_id = app.SubID;
             meta_data.date = date;
             meta_data.timestamp = datestr(now, 'HHMMSS');
@@ -564,6 +553,7 @@ end
             app.EMGYMaxEditField.FontSize = 18;
             app.EMGYMaxEditField.Layout.Row = 2;
             app.EMGYMaxEditField.Layout.Column = 2;
+            app.EMGYMaxEditField.Value = 0.5;
 
             % Create YminLabel_3
             app.YminLabel_3 = uilabel(app.EMGDiSplayOptionsGridLayout);
@@ -578,6 +568,7 @@ end
             app.EMGYMinEditField.FontSize = 18;
             app.EMGYMinEditField.Layout.Row = 3;
             app.EMGYMinEditField.Layout.Column = 2;
+            app.EMGYMinEditField.Value = -0.5;
 
             % Create EMGChannelsLabel
             app.EMGChannelsLabel = uilabel(app.EMGDiSplayOptionsGridLayout);
@@ -650,6 +641,7 @@ end
             app.AnalogYMaxEditField.FontSize = 18;
             app.AnalogYMaxEditField.Layout.Row = 2;
             app.AnalogYMaxEditField.Layout.Column = 2;
+            app.AnalogYMaxEditField.Value = 0.5;
 
             % Create YminLabel_2
             app.YminLabel_2 = uilabel(app.AnalogDisplayOptionsGridLayout);
@@ -664,6 +656,7 @@ end
             app.AnalogYMinEditField.FontSize = 18;
             app.AnalogYMinEditField.Layout.Row = 3;
             app.AnalogYMinEditField.Layout.Column = 2;
+            app.AnalogYMinEditField.Value = -0.5;
 
             % Create AnalogChannelLabel
             app.AnalogChannelLabel = uilabel(app.AnalogDisplayOptionsGridLayout);
@@ -736,6 +729,7 @@ end
             app.CombinedYMaxEditField.FontSize = 18;
             app.CombinedYMaxEditField.Layout.Row = 2;
             app.CombinedYMaxEditField.Layout.Column = 2;
+            app.CombinedYMaxEditField.Value = 0.5;
 
             % Create YminLabel
             app.YminLabel = uilabel(app.CombinedDisplayOptionsGridLayout);
@@ -750,6 +744,7 @@ end
             app.CombinedYMinEditField.FontSize = 18;
             app.CombinedYMinEditField.Layout.Row = 3;
             app.CombinedYMinEditField.Layout.Column = 2;
+            app.CombinedYMinEditField.Value = -0.5;
 
             % Create ControlPanel
             app.ControlPanel = uipanel(app.UIFigureGridLayout);
@@ -876,7 +871,7 @@ end
     methods (Access = public)
 
         % Construct app
-        function app = DAQ_App
+        function app = DAQ_App_exported
 
             % Create UIFigure and components
             createComponents(app)
